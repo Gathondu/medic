@@ -9,6 +9,15 @@ import remarkBreaks from 'remark-breaks';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { Show, PricingTable, UserButton } from '@clerk/nextjs';
 
+/**
+ * LLM SSE streams often omit newlines. CommonMark ATX headings (# … ###) must
+ * start a line or they render as plain text.
+ */
+function normalizeStreamedMarkdownForBlocks(src: string): string {
+    if (!src) return src;
+    return src.replace(/([^\n])(#{1,6}\s)/g, '$1\n\n$2');
+}
+
 function ConsultationForm() {
     const { getToken } = useAuth();
 
@@ -170,7 +179,7 @@ function ConsultationForm() {
                 <section className="mt-8 bg-gray-50 dark:bg-gray-800 rounded-xl shadow-lg p-8">
                     <div className="markdown-content prose prose-blue dark:prose-invert max-w-none">
                         <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-                            {output}
+                            {normalizeStreamedMarkdownForBlocks(output)}
                         </ReactMarkdown>
                     </div>
                 </section>
