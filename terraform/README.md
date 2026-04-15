@@ -30,17 +30,17 @@ App Runner needs a real image in ECR before the service can run. Use one of thes
 
 1. Copy `terraform.tfvars.example` to `terraform.tfvars` (gitignored) and set `aws_region`, `clerk_jwks_url`, and `openrouter_api_key`.
 
-2. **Phase 1** — ECR, IAM, auto scaling only:
+2. **Phase 1** — ECR and auto scaling only (IAM + App Runner run in phase 2):
 
 ```bash
 cd terraform
 terraform init
 terraform apply -auto-approve \
   -target=aws_ecr_repository.consultation \
-  -target=aws_iam_role.apprunner_ecr_access \
-  -target=aws_iam_role_policy_attachment.apprunner_ecr_access \
   -target=aws_apprunner_auto_scaling_configuration_version.consultation
 ```
+
+If the App Runner ECR pull role already exists in IAM (`EntityAlreadyExists`), set `create_apprunner_ecr_access_role = false` in `terraform.tfvars` (or `TF_VAR_create_apprunner_ecr_access_role=false`). Terraform will look up that role by name instead of creating it. The role must trust `build.apprunner.amazonaws.com` and typically attach `AWSAppRunnerServicePolicyForECRAccess`.
 
 3. **Build and push** the `linux/amd64` image to `consultation-app:latest` (same commands as in your course / `aws-docker-deploy.yml`).
 
@@ -69,6 +69,7 @@ Optional: set `auto_deployments_enabled = true` on the App Runner source in `mai
 | ------------------------ | -------------- | -------------------------------- |
 | `AWS_REGION`             | `us-east-1`    | Region for AWS CLI and resources |
 | `APP_RUNNER_SERVICE_NAME` | `consultation-app-service` | Optional; defaults to this if unset |
+| `CREATE_APPRUNNER_ECR_ACCESS_ROLE` | `false` | Optional. Set to `false` if the IAM role `consultation-app-apprunner-ecr-access` already exists; Terraform will not create it (bootstrap + local apply). |
 
 ### Repository secrets (Settings → Secrets and variables → Actions → Secrets)
 

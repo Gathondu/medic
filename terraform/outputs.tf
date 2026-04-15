@@ -30,7 +30,7 @@ output "apprunner_service_url" {
 
 output "apprunner_ecr_access_role_arn" {
   description = "IAM role App Runner uses to pull from ECR"
-  value       = aws_iam_role.apprunner_ecr_access.arn
+  value       = local.apprunner_ecr_access_role_arn
 }
 
 output "image_uri" {

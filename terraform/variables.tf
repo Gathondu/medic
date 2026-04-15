@@ -9,6 +9,18 @@ variable "project_name" {
   default     = "consultation-app"
 }
 
+variable "create_apprunner_ecr_access_role" {
+  description = "If false, Terraform does not create the App Runner ECR pull role; it looks up an existing IAM role by name (see apprunner_ecr_access_role_name). Use when the role already exists to avoid EntityAlreadyExists conflicts."
+  type        = bool
+  default     = true
+}
+
+variable "apprunner_ecr_access_role_name" {
+  description = "IAM role name App Runner uses to pull from ECR when create_apprunner_ecr_access_role is false. Defaults to \"{project_name}-apprunner-ecr-access\"."
+  type        = string
+  default     = null
+}
+
 variable "ecr_repository_name" {
   description = "ECR repository name (course uses consultation-app)"
   type        = string

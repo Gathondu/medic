@@ -3,6 +3,10 @@
 
 aws_region = "us-east-1"
 
+# If the App Runner ECR access role already exists in IAM, skip creating it and look it up by name:
+# create_apprunner_ecr_access_role = false
+# apprunner_ecr_access_role_name    = "consultation-app-apprunner-ecr-access" # optional; default matches project_name
+
 # Optional overrides (defaults match the course names)
 # project_name              = "consultation-app"
 # ecr_repository_name       = "consultation-app"

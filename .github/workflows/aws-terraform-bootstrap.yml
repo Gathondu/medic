@@ -1,6 +1,6 @@
 name: AWS Terraform bootstrap
 
-# First-time: creates ECR + IAM + auto-scaling, pushes an image, then creates App Runner.
+# First-time: creates ECR + auto-scaling, pushes an image, then applies IAM (unless disabled) + App Runner.
 # All steps run in one job so Terraform state stays on the same runner.
 # After this succeeds, use "AWS Docker deploy" on push to main for routine updates.
 
@@ -42,17 +42,16 @@ jobs:
         working-directory: terraform
         run: terraform init -input=false
 
-      - name: Terraform apply (phase 1 — ECR, IAM, auto-scaling)
+      - name: Terraform apply (phase 1 — ECR, auto-scaling)
         working-directory: terraform
         env:
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_clerk_jwks_url: ${{ secrets.CLERK_JWKS_URL }}
           TF_VAR_openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          TF_VAR_create_apprunner_ecr_access_role: ${{ vars.CREATE_APPRUNNER_ECR_ACCESS_ROLE == 'false' && 'false' || 'true' }}
         run: |
           terraform apply -auto-approve \
             -target=aws_ecr_repository.consultation \
-            -target=aws_iam_role.apprunner_ecr_access \
-            -target=aws_iam_role_policy_attachment.apprunner_ecr_access \
             -target=aws_apprunner_auto_scaling_configuration_version.consultation
 
       - name: Set AWS account ID
@@ -77,12 +76,13 @@ jobs:
           docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
           docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
-      - name: Terraform apply (phase 2 — App Runner)
+      - name: Terraform apply (phase 2 — IAM + App Runner)
         working-directory: terraform
         env:
           TF_VAR_aws_region: ${{ env.AWS_REGION }}
           TF_VAR_clerk_jwks_url: ${{ secrets.CLERK_JWKS_URL }}
           TF_VAR_openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          TF_VAR_create_apprunner_ecr_access_role: ${{ vars.CREATE_APPRUNNER_ECR_ACCESS_ROLE == 'false' && 'false' || 'true' }}
         run: terraform apply -auto-approve
 
       - name: Terraform outputs

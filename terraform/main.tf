@@ -11,6 +11,10 @@ data "aws_iam_policy_document" "apprunner_ecr_assume" {
   }
 }
 
+locals {
+  apprunner_ecr_access_role_name = coalesce(var.apprunner_ecr_access_role_name, "${var.project_name}-apprunner-ecr-access")
+}
+
 resource "aws_ecr_repository" "consultation" {
   name                 = var.ecr_repository_name
   image_tag_mutability = "MUTABLE"
@@ -21,13 +25,22 @@ resource "aws_ecr_repository" "consultation" {
 }
 
 resource "aws_iam_role" "apprunner_ecr_access" {
-  name               = "${var.project_name}-apprunner-ecr-access"
+  count = var.create_apprunner_ecr_access_role ? 1 : 0
+
+  name               = local.apprunner_ecr_access_role_name
   assume_role_policy = data.aws_iam_policy_document.apprunner_ecr_assume.json
 }
 
 resource "aws_iam_role_policy_attachment" "apprunner_ecr_access" {
-  role       = aws_iam_role.apprunner_ecr_access.name
+  count = var.create_apprunner_ecr_access_role ? 1 : 0
+
+  role       = aws_iam_role.apprunner_ecr_access[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess"
+}
+
+data "aws_iam_role" "apprunner_ecr_access_existing" {
+  count = var.create_apprunner_ecr_access_role ? 0 : 1
+  name  = local.apprunner_ecr_access_role_name
 }
 
 resource "aws_apprunner_auto_scaling_configuration_version" "consultation" {
@@ -39,7 +52,8 @@ resource "aws_apprunner_auto_scaling_configuration_version" "consultation" {
 }
 
 locals {
-  image_identifier = "${aws_ecr_repository.consultation.repository_url}:${var.image_tag}"
+  image_identifier               = "${aws_ecr_repository.consultation.repository_url}:${var.image_tag}"
+  apprunner_ecr_access_role_arn  = var.create_apprunner_ecr_access_role ? aws_iam_role.apprunner_ecr_access[0].arn : data.aws_iam_role.apprunner_ecr_access_existing[0].arn
 }
 
 resource "aws_apprunner_service" "consultation" {
@@ -49,7 +63,7 @@ resource "aws_apprunner_service" "consultation" {
 
   source_configuration {
     authentication_configuration {
-      access_role_arn = aws_iam_role.apprunner_ecr_access.arn
+      access_role_arn = local.apprunner_ecr_access_role_arn
     }
 
     auto_deployments_enabled = false
@@ -83,7 +97,6 @@ resource "aws_apprunner_service" "consultation" {
     unhealthy_threshold = 5
   }
 
-  depends_on = [
-    aws_iam_role_policy_attachment.apprunner_ecr_access,
-  ]
+  # Ensures AWSAppRunnerServicePolicyForECRAccess is attached before App Runner pulls (no-op when role is external).
+  depends_on = [aws_iam_role_policy_attachment.apprunner_ecr_access]
 }
