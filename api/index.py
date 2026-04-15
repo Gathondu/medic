@@ -1,15 +1,15 @@
 import os
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI  # type: ignore
-from fastapi.responses import StreamingResponse  # type: ignore
-from fastapi_clerk_auth import (  # type: ignore
+from fastapi import Depends, FastAPI
+from fastapi.responses import StreamingResponse
+from fastapi_clerk_auth import (
     ClerkConfig,
     ClerkHTTPBearer,
     HTTPAuthorizationCredentials,
 )
-from openai import AsyncOpenAI  # type: ignore
-from pydantic import BaseModel  # type: ignore
+from openai import AsyncOpenAI
+from pydantic import BaseModel
 
 load_dotenv(override=True)
 

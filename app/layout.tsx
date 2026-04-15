@@ -30,7 +30,7 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <ClerkProvider>
           {/* Navigation */}
-          <nav className="flex justify-between items-center mb-12">
+          <nav className="flex justify-between items-center mb-12 p-4">
             <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
               MediNotes Pro
             </h1>
@@ -50,7 +50,7 @@ export default function RootLayout({
                   >
                     Go to App
                   </Link>
-                  <UserButton showName={true} />
+                  <UserButton />
                 </div>
               </Show>
             </div>
