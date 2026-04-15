@@ -26,8 +26,7 @@ function ConsultationForm() {
         setOutput('');
         setLoading(true);
 
-        const jwt = await getToken();
-        if (!jwt) {
+        if (!(await getToken())) {
             setOutput('Authentication required');
             setLoading(false);
             return;
@@ -36,31 +35,74 @@ function ConsultationForm() {
         const controller = new AbortController();
         let buffer = '';
 
-        await fetchEventSource('/api', {
-            signal: controller.signal,
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${jwt}`,
-            },
-            body: JSON.stringify({
-                patient_name: patientName,
-                date_of_visit: visitDate?.toISOString().slice(0, 10),
-                notes,
-            }),
-            onmessage(ev) {
-                buffer += ev.data;
-                setOutput(buffer);
-            },
-            onclose() { 
-                setLoading(false); 
-            },
-            onerror(err) {
-                console.error('SSE error:', err);
-                controller.abort();
-                setLoading(false);
-            },
-        });
+        try {
+            await fetchEventSource('/api', {
+                signal: controller.signal,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'text/event-stream',
+                },
+                body: JSON.stringify({
+                    patient_name: patientName,
+                    date_of_visit: visitDate?.toISOString().slice(0, 10),
+                    notes,
+                }),
+                fetch: async (input, init) => {
+                    const token = await getToken();
+                    if (!token) {
+                        throw new Error('Authentication required');
+                    }
+                    const headers = new Headers(init?.headers);
+                    headers.set('Authorization', `Bearer ${token}`);
+                    const incoming = init?.signal;
+                    const mergedSignal =
+                        incoming &&
+                        typeof AbortSignal !== 'undefined' &&
+                        'any' in AbortSignal
+                            ? AbortSignal.any([controller.signal, incoming])
+                            : incoming ?? controller.signal;
+                    return globalThis.fetch(input, {
+                        ...init,
+                        headers,
+                        signal: mergedSignal,
+                    });
+                },
+                async onopen(response) {
+                    if (!response.ok) {
+                        const detail = await response.text();
+                        throw new Error(
+                            `Backend returned ${response.status}: ${detail.slice(0, 500)}`,
+                        );
+                    }
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType?.startsWith('text/event-stream')) {
+                        throw new Error(
+                            `Expected text/event-stream, got ${contentType ?? 'none'}`,
+                        );
+                    }
+                },
+                onmessage(ev) {
+                    buffer += ev.data;
+                    setOutput(buffer);
+                },
+                onclose() {},
+                onerror(err) {
+                    console.error('SSE error:', err);
+                    setOutput(
+                        (prev) =>
+                            prev ||
+                            (err instanceof Error ? err.message : String(err)),
+                    );
+                    throw err;
+                },
+            });
+        } catch (e) {
+            console.error(e);
+            setOutput((prev) => prev || (e instanceof Error ? e.message : String(e)));
+        } finally {
+            setLoading(false);
+        }
     }
 
     return (
