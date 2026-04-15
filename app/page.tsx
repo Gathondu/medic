@@ -1,7 +1,7 @@
 "use client"
 
 import Link from 'next/link';
-import { Show, SignInButton } from '@clerk/nextjs';
+import { Show, SignInButton } from '@clerk/react';
 
 export default function Home() {
   return (

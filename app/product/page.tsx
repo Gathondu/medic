@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, FormEvent } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useAuth } from '@clerk/react';
 import DatePicker from 'react-datepicker';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
-import { Show, PricingTable, UserButton } from '@clerk/nextjs';
+import { Show, PricingTable } from '@clerk/react';
 
 /**
  * LLM SSE streams often omit newlines. CommonMark ATX headings (# … ###) must
@@ -16,6 +16,12 @@ import { Show, PricingTable, UserButton } from '@clerk/nextjs';
 function normalizeStreamedMarkdownForBlocks(src: string): string {
     if (!src) return src;
     return src.replace(/([^\n])(#{1,6}\s)/g, '$1\n\n$2');
+}
+
+/** Same-origin when built with static export + FastAPI; set NEXT_PUBLIC_API_ORIGIN for `next dev`. */
+function consultationApiUrl(): string {
+    const base = (process.env.NEXT_PUBLIC_API_ORIGIN ?? '').trim().replace(/\/$/, '');
+    return base === '' ? '/api/consultation' : `${base}/api/consultation`;
 }
 
 function ConsultationForm() {
@@ -45,7 +51,7 @@ function ConsultationForm() {
         let buffer = '';
 
         try {
-            await fetchEventSource('/api/consultation', {
+            await fetchEventSource(consultationApiUrl(), {
                 signal: controller.signal,
                 method: 'POST',
                 headers: {

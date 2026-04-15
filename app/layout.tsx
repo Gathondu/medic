@@ -1,9 +1,8 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
-import { ClerkProvider, Show, SignInButton, UserButton } from '@clerk/nextjs'
 import { Geist, Geist_Mono } from 'next/font/google'
 import 'react-datepicker/dist/react-datepicker.css';
 import './globals.css'
+import { AppProviders } from './providers'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -28,35 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <ClerkProvider>
-          {/* Navigation */}
-          <nav className="flex justify-between items-center mb-12 p-4">
-            <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-              MediNotes Pro
-            </h1>
-            <div>
-              <Show when="signed-out">
-                <SignInButton mode="modal">
-                  <button className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors">
-                    Sign In
-                  </button>
-                </SignInButton>
-              </Show>
-              <Show when="signed-in">
-                <div className="flex items-center gap-4">
-                  <Link 
-                    href="/product" 
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
-                  >
-                    Go to App
-                  </Link>
-                  <UserButton />
-                </div>
-              </Show>
-            </div>
-          </nav>
-          {children}
-        </ClerkProvider>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   )
