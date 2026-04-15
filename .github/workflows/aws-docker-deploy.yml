@@ -1,0 +1,72 @@
+name: AWS Docker deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: aws-docker-deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: consultation-app
+  IMAGE_NAME: consultation-app
+  IMAGE_TAG: latest
+  APP_RUNNER_SERVICE_NAME: ${{ vars.APP_RUNNER_SERVICE_NAME }}
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set AWS account ID
+        id: aws
+        run: echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        env:
+          ECR_REGISTRY: ${{ steps.aws.outputs.account_id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            --build-arg "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}" \
+            -t "${IMAGE_NAME}:${IMAGE_TAG}" .
+          docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+      - name: Start App Runner deployment
+        env:
+          SERVICE_NAME: ${{ env.APP_RUNNER_SERVICE_NAME }}
+        run: |
+          if [ -z "$SERVICE_NAME" ] || [ "$SERVICE_NAME" = "" ]; then
+            SERVICE_NAME="consultation-app-service"
+          fi
+          SERVICE_ARN=$(aws apprunner list-services \
+            --query "ServiceSummaryList[?ServiceName=='${SERVICE_NAME}'].ServiceArn | [0]" \
+            --output text)
+          if [ "$SERVICE_ARN" = "None" ] || [ -z "$SERVICE_ARN" ]; then
+            echo "App Runner service '${SERVICE_NAME}' not found. Create it with Terraform first (see terraform/README.md)."
+            exit 1
+          fi
+          aws apprunner start-deployment --service-arn "$SERVICE_ARN"

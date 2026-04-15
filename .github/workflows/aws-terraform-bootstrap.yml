@@ -1,0 +1,97 @@
+name: AWS Terraform bootstrap
+
+# First-time: creates ECR + IAM + auto-scaling, pushes an image, then creates App Runner.
+# All steps run in one job so Terraform state stays on the same runner.
+# After this succeeds, use "AWS Docker deploy" on push to main for routine updates.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: aws-terraform-bootstrap
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: consultation-app
+  IMAGE_NAME: consultation-app
+  IMAGE_TAG: latest
+
+jobs:
+  bootstrap:
+    name: Terraform bootstrap (ECR → image → App Runner)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.0"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init
+        working-directory: terraform
+        run: terraform init -input=false
+
+      - name: Terraform apply (phase 1 — ECR, IAM, auto-scaling)
+        working-directory: terraform
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_clerk_jwks_url: ${{ secrets.CLERK_JWKS_URL }}
+          TF_VAR_openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          terraform apply -auto-approve \
+            -target=aws_ecr_repository.consultation \
+            -target=aws_iam_role.apprunner_ecr_access \
+            -target=aws_iam_role_policy_attachment.apprunner_ecr_access \
+            -target=aws_apprunner_auto_scaling_configuration_version.consultation
+
+      - name: Set AWS account ID
+        id: aws
+        run: echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.aws.outputs.account_id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            --build-arg "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}" \
+            -t "${IMAGE_NAME}:${IMAGE_TAG}" .
+          docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+      - name: Terraform apply (phase 2 — App Runner)
+        working-directory: terraform
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_clerk_jwks_url: ${{ secrets.CLERK_JWKS_URL }}
+          TF_VAR_openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+        run: terraform apply -auto-approve
+
+      - name: Terraform outputs
+        working-directory: terraform
+        run: terraform output -no-color
+
+      - name: Upload Terraform state (for local terraform commands)
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-state
+          path: terraform/terraform.tfstate
+          if-no-files-found: error

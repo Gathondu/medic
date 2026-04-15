@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars (gitignored) and fill in secrets.
+# Or export TF_VAR_* and pass -var-file for non-secret values only.
+
+aws_region = "us-east-1"
+
+# Optional overrides (defaults match the course names)
+# project_name              = "consultation-app"
+# ecr_repository_name       = "consultation-app"
+# app_runner_service_name   = "consultation-app-service"
+# app_runner_cpu            = "256"
+# app_runner_memory         = "512"
+# openrouter_base_url       = "https://openrouter.ai/api/v1"
+
+# Required secrets (do not commit real values)
+# clerk_jwks_url      = "https://your-instance.clerk.accounts.dev/.well-known/jwks.json"
+# openrouter_api_key  = "sk-or-v1-..."

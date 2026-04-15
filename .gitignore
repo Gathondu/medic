@@ -40,6 +40,14 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.*.log
+*.auto.tfvars
+*.tfvars
+
 # python
 **/__pycache__/
 **/*.pyc
