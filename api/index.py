@@ -7,7 +7,7 @@ from fastapi_clerk_auth import (  # type: ignore
     ClerkHTTPBearer,
     HTTPAuthorizationCredentials,
 )
-from openai import OpenAI  # type: ignore
+from openai import AsyncOpenAI  # type: ignore
 from pydantic import BaseModel  # type: ignore
 
 app = FastAPI()
@@ -40,12 +40,12 @@ Notes:
 
 
 @app.post("/api")
-def consultation_summary(
+async def consultation_summary(
     visit: Visit,
     creds: HTTPAuthorizationCredentials = Depends(clerk_guard),
 ):
     user_id = creds.decoded["sub"]  # Available for tracking/auditing
-    client = OpenAI(
+    client = AsyncOpenAI(
         api_key=os.getenv("OPENROUTER_API_KEY"),
         base_url=os.getenv("OPENROUTER_BASE_URL"),
     )
@@ -57,20 +57,22 @@ def consultation_summary(
         {"role": "user", "content": user_prompt},
     ]
 
-    stream = client.chat.completions.create(
-        model="deepseek/deepseek-r1",
-        messages=prompt,
-        stream=True,
-    )
-
-    def event_stream():
-        for chunk in stream:
-            text = chunk.choices[0].delta.content
-            if text:
-                lines = text.split("\n")
-                for line in lines[:-1]:
-                    yield f"data: {line}\n\n"
-                    yield "data:  \n"
-                yield f"data: {lines[-1]}\n\n"
+    async def event_stream():
+        try:
+            # Use await for the async client
+            stream = await client.chat.completions.create(
+                model="deepseek/deepseek-r1:free",
+                messages=prompt,
+                stream=True,
+            )
+            async for chunk in stream:
+                text = chunk.choices[0].delta.content
+                if text:
+                    # Simple yield for SSE format
+                    yield f"data: {text}\n\n"
+        except Exception as e:
+            # This logs the actual error to your terminal
+            print(f"Streaming Error: {e}")
+            yield f"data: [ERROR] {str(e)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
