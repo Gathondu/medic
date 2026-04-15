@@ -45,7 +45,7 @@ function ConsultationForm() {
         let buffer = '';
 
         try {
-            await fetchEventSource('/api', {
+            await fetchEventSource('/api/consultation', {
                 signal: controller.signal,
                 method: 'POST',
                 headers: {
